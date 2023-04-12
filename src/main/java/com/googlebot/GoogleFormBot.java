@@ -1,5 +1,7 @@
 package com.googlebot;
 
+import com.googlebot.model.CheckboxesQuestion;
+import com.googlebot.model.MultipleChoiceQuestion;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -10,7 +12,7 @@ import java.util.List;
 public class GoogleFormBot {
 
     private WebDriver driver;
-    private List<QuestionModel> questionModelArrayList;
+    private List<Question> questionList;
     private int pageNow = 1;
 
     public GoogleFormBot(WebDriver driver){
@@ -27,58 +29,73 @@ public class GoogleFormBot {
 
     public void readPage(String url){
         driver.get(url);
-        questionModelArrayList = new ArrayList<>();
-        List<WebElement> questionList = driver.findElements(By.xpath("//*[@id=\"mG61Hd\"]/div[2]/div/div[2]/div"));
-        for (int i = 0; i<questionList.size(); i++) {
-            String questionXpath = "//*[@id=\"mG61Hd\"]/div[2]/div/div[2]/div["+(i+1)+"]";
-            WebElement questionElement = driver.findElement(By.xpath(questionXpath));
-            QuestionType questionType = getQuestionType(questionElement);
+        questionList = new ArrayList<>();
+
+        List<WebElement> questionElementList = driver.findElements(By.xpath(Question.questionXpath));
+        for (int i = 0; i<questionElementList.size(); i++) {
+            QuestionType questionType = getQuestionType(questionElementList.get(i));
             if (questionType!=null){
-                String title = getQuestionTitle(questionElement);
-                QuestionModel questionModel = new QuestionModel();
-                questionModel.setQuestionElement(questionElement);
-                questionModel.setQuestionType(questionType);
-                questionModel.setQuestionTitle(title);
-                questionModel.setPage(pageNow);
 
-                if (questionModel.getQuestionType() == QuestionType.MULTIPLE_CHOICE){
+                String questionTitle = getQuestionTitle(questionElementList.get(i));
+
+                if (questionType == QuestionType.MULTIPLE_CHOICE){
+                    MultipleChoiceQuestion question = new MultipleChoiceQuestion();
+                    question.setQuestionTitle(questionTitle);
+                    question.setQuestionType(questionType);
+                    question.setQuestionElement(questionElementList.get(i));
+
                     List<MultipleChoiceModel> multipleChoiceModels = getQuestionMultipleChoicesData(
-                            questionModel.getQuestionElement()
+                            question
                     );
-                    questionModel.setMultipleChoiceModelList(multipleChoiceModels);
-                }else if (questionModel.getQuestionType() == QuestionType.CHECKBOXES){
-                    List<CheckboxesModel> checkboxesModelList = getQuestionCheckboxesData(
-                            questionModel.getQuestionElement()
-                    );
-                    questionModel.setCheckboxesModelList(checkboxesModelList);
-                }
+                    question.setQuestionData(multipleChoiceModels);
 
-                questionModelArrayList.add(questionModel);
+                    questionList.add(question);
+
+
+                }else if (questionType == QuestionType.CHECKBOXES){
+                    CheckboxesQuestion question = new CheckboxesQuestion();
+                    question.setQuestionTitle(questionTitle);
+                    question.setQuestionType(questionType);
+                    question.setQuestionElement(questionElementList.get(i));
+
+                    List<CheckboxesModel> checkboxesModels = getQuestionCheckboxesData(
+                            question
+                    );
+                    question.setQuestionData(checkboxesModels);
+                    questionList.add(question);
+
+                }
 
             }
 
         }
 
-        for (int i = 0; i<questionModelArrayList.size(); i++){
-            System.out.println(i+" : "+questionModelArrayList.get(i).getQuestionTitle()+" | "+questionModelArrayList.get(i).getQuestionType());
-
-            if (questionModelArrayList.get(i).getQuestionType() == QuestionType.MULTIPLE_CHOICE){
-                for (int j = 0; j<questionModelArrayList.get(i).getMultipleChoiceModelList().size(); j++){
-                    System.out.println("     "+j+" : "+questionModelArrayList.get(i).getMultipleChoiceModelList().get(j).getTitle());
-                }
-            }else if (questionModelArrayList.get(i).getQuestionType() == QuestionType.CHECKBOXES){
-                for (int j = 0; j<questionModelArrayList.get(i).getCheckboxesModelList().size(); j++){
-                    System.out.println("     "+j+" : "+questionModelArrayList.get(i).getCheckboxesModelList().get(j).getTitle());
-                }
-            }
-
-        }
+        printQuestionPage();
 
     }
 
+    private void printQuestionPage(){
+        for(int i = 0; i<questionList.size(); i++){
+
+            if (questionList.get(i) instanceof MultipleChoiceQuestion){
+                MultipleChoiceQuestion question = (MultipleChoiceQuestion) questionList.get(i);
+                System.out.println(i+" : "+question.getQuestionTitle()+"\t"+question.getQuestionType());
+                for (int j = 0; j<question.getQuestionData().size(); j++){
+                    System.out.println("\t"+i+" : "+question.getQuestionData().get(j).getTitle());
+                }
+            }else if (questionList.get(i) instanceof CheckboxesQuestion){
+                CheckboxesQuestion question = (CheckboxesQuestion) questionList.get(i);
+                System.out.println(i+" : "+question.getQuestionTitle()+"\t"+question.getQuestionType());
+                for (int j = 0; j<question.getQuestionData().size(); j++){
+                    System.out.println("\t"+j+" : "+question.getQuestionData().get(j).getTitle());
+                }
+            }
+
+        }
+    }
+
     private String getQuestionTitle(WebElement element){
-        String xpath = ".//div/div/div[1]/div/div/span[1]";
-        String title = element.findElement(By.xpath(xpath)).getText();
+        String title = element.findElement(By.xpath(Question.titleXpath)).getText();
         return title;
     }
 
@@ -110,14 +127,13 @@ public class GoogleFormBot {
         return null;
     }
 
-    private List<MultipleChoiceModel> getQuestionMultipleChoicesData(WebElement element){
+    private List<MultipleChoiceModel> getQuestionMultipleChoicesData(MultipleChoiceQuestion question){
 
         List<MultipleChoiceModel> multipleChoiceModelList = new ArrayList<>();
-        List<WebElement> multipleChoiceList = element.findElements(By.xpath("./div/div/div[2]/div[1]/div/span/div/div"));
+        List<WebElement> multipleChoiceList = question.getQuestionElement().findElements(By.xpath(question.choiceXpath()));
         for (int i = 0 ;i<multipleChoiceList.size() ;i++){
-            WebElement multipleChoiceElement = multipleChoiceList.get(i).findElement(By.xpath("./label/div"));
-            String choiceText = multipleChoiceElement.findElement(By.xpath("./div[2]/div/span")).getText();
-            WebElement radioButton = multipleChoiceElement.findElement(By.xpath("./div[1]/div"));
+            String choiceText = multipleChoiceList.get(i).findElement(By.xpath(question.labelXpath())).getText();
+            WebElement radioButton = multipleChoiceList.get(i).findElement(By.xpath(question.controlXpath()));
             MultipleChoiceModel multipleChoiceModel = new MultipleChoiceModel();
             multipleChoiceModel.setTitle(choiceText);
             multipleChoiceModel.setCheckBoxElement(radioButton);
@@ -128,12 +144,12 @@ public class GoogleFormBot {
 
     }
 
-    private List<CheckboxesModel> getQuestionCheckboxesData(WebElement element){
+    private List<CheckboxesModel> getQuestionCheckboxesData(CheckboxesQuestion question){
         List<CheckboxesModel> checkboxesModelList = new ArrayList<>();
-        List<WebElement> checkboxesList = element.findElements(By.xpath("./div/div/div[2]/div[1]/div"));
+        List<WebElement> checkboxesList = question.getQuestionElement().findElements(By.xpath(question.choiceXpath()));
         for (int i = 0; i<checkboxesList.size(); i++){
-           String checkboxesTitle = checkboxesList.get(i).findElement(By.xpath("./label/div/div[2]/div/span")).getText();
-           WebElement checkboxesElement = checkboxesList.get(i).findElement(By.xpath("./label/div/div[1]"));
+           String checkboxesTitle = checkboxesList.get(i).findElement(By.xpath(question.labelXpath())).getText();
+           WebElement checkboxesElement = checkboxesList.get(i).findElement(By.xpath(question.controlXpath()));
            CheckboxesModel checkboxesModel  = new CheckboxesModel();
            checkboxesModel.setTitle(checkboxesTitle);
            checkboxesModel.setCheckboxElement(checkboxesElement);
